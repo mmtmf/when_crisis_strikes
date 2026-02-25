@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this repository, please cite it."
+title: "When Crisis Strikes: Crisis Sermons as Threshold Rhetoric"
+type: software
+authors:
+  - family-names: "Thunbo"
+    given-names: "Michael Mørch"
+license: "MIT"
+repository-code: "https://github.com/mmtmf/when_crisis_strikes"
+abstract: "Replication materials and visualization code for a quantitative close reading of Danish crisis-explicit sermons across three societal crises."
+keywords:
+  - "digital humanities"
+  - "sermons"
+  - "homiletics"
+  - "crisis"
+  - "quantitative close reading"
+  - "Denmark"
