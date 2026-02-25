@@ -15,3 +15,12 @@ keywords:
   - "crisis"
   - "quantitative close reading"
   - "Denmark"
+
+
+version: 1.0.0
+
+date-released: YYYY-MM-DD
+
+doi: ... (if you mint a DOI via Zenodo)
+
+A preferred-citation: block for the article (once the citation is final)
