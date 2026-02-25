@@ -80,7 +80,7 @@ Folder structure:
 - data
     - Kodeark_3.xlsm
     - codebook
-    - data-dictionary
+    - data_dictionary
 - results
     - figure_A...
     - figure_B...
@@ -90,6 +90,8 @@ Folder structure:
     - figure_hom...
 - src
     - visualizations.py
+- .gitignore
+- CITATION.cff
 - LICENSE
 - LICENSE-DATA
 - requirements.txt
@@ -127,8 +129,9 @@ MIT License (see LICENSE)
 Data & documentation license (i.e. everything besides the code):
 Creative Commons Attribution 4.0 International (CC BY 4.0) (see LICENSE-DATA)
 
-## Citation:
-If you use this repository, please cite it as: ... 
+Citation:
+If you use this repository, please cite it using CITATION.cff (recommended). 
+Alternatively, cite it as: ... 
 
 ## About the Project
 
