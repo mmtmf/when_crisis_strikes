@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Sequence
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -148,7 +148,6 @@ def load_tidy_from_udregninger2(xlsm_path: str, sheet: str = "Udregninger 2") ->
     blocks = [
         {
             "crisis": "Schleswigian Wars",
-            "w": 89.0,
             "col_named_n": 1,
             "col_named_p": 2,
             "col_base_n": 3,
@@ -157,7 +156,6 @@ def load_tidy_from_udregninger2(xlsm_path: str, sheet: str = "Udregninger 2") ->
         },
         {
             "crisis": "Occupation",
-            "w": 103.0,
             "col_named_n": 25,
             "col_named_p": 26,
             "col_base_n": 27,
@@ -166,7 +164,6 @@ def load_tidy_from_udregninger2(xlsm_path: str, sheet: str = "Udregninger 2") ->
         },
         {
             "crisis": "COVID-19",
-            "w": 103.0,
             "col_named_n": 49,
             "col_named_p": 50,
             "col_base_n": 51,
@@ -194,24 +191,57 @@ def load_tidy_from_udregninger2(xlsm_path: str, sheet: str = "Udregninger 2") ->
     tidy = pd.concat(tidy_parts, ignore_index=True)
 
     # ----------------------------
-    # Pooled corpus (vectorized weighted means; no groupby.apply)
+    # Pooled corpus
+    # Proper pooling by aggregating numerators over separate
+    # crisis and non-crisis denominators
     # ----------------------------
-    crisis_weights = {b["crisis"]: b["w"] for b in blocks}
-
     tmpw = tidy.copy()
-    tmpw["w"] = tmpw["crisis"].map(crisis_weights).astype(float)
 
-    tmpw["p_crisis_w"] = tmpw["p_crisis"] * tmpw["w"]
-    tmpw["p_base_w"] = tmpw["p_base"] * tmpw["w"]
+    # Recover total denominators within each period:
+    # N_crisis_period ≈ n_crisis_code / p_crisis
+    # N_base_period   ≈ n_base_code   / p_base
+    #
+    # These totals should be constant within each crisis block,
+    # so estimate them robustly with the median across valid rows.
+    denom_rows = []
+    for crisis_name, g in tmpw.groupby("crisis", observed=True):
+        crisis_mask = (
+            g["n_crisis_code"].notna()
+            & g["p_crisis"].notna()
+            & (g["p_crisis"] > 0)
+        )
+        base_mask = (
+            g["n_base_code"].notna()
+            & g["p_base"].notna()
+            & (g["p_base"] > 0)
+        )
+
+        crisis_denoms = g.loc[crisis_mask, "n_crisis_code"] / g.loc[crisis_mask, "p_crisis"]
+        base_denoms = g.loc[base_mask, "n_base_code"] / g.loc[base_mask, "p_base"]
+
+        N_crisis = float(np.nanmedian(crisis_denoms)) if len(crisis_denoms) else np.nan
+        N_base = float(np.nanmedian(base_denoms)) if len(base_denoms) else np.nan
+
+        denom_rows.append(
+            {
+                "crisis": crisis_name,
+                "N_crisis_total": N_crisis,
+                "N_base_total": N_base,
+            }
+        )
+
+    denom_df = pd.DataFrame(denom_rows)
+    tmpw = tmpw.merge(denom_df, on="crisis", how="left")
 
     pooled = tmpw.groupby("code", as_index=False).agg(
-        w=("w", "sum"),
-        p_crisis_w=("p_crisis_w", "sum"),
-        p_base_w=("p_base_w", "sum"),
+        n_crisis_code=("n_crisis_code", "sum"),
+        n_base_code=("n_base_code", "sum"),
+        N_crisis_total=("N_crisis_total", "sum"),
+        N_base_total=("N_base_total", "sum"),
     )
 
-    pooled["p_crisis"] = pooled["p_crisis_w"] / pooled["w"]
-    pooled["p_base"] = pooled["p_base_w"] / pooled["w"]
+    pooled["p_crisis"] = pooled["n_crisis_code"] / pooled["N_crisis_total"]
+    pooled["p_base"] = pooled["n_base_code"] / pooled["N_base_total"]
     pooled["crisis"] = "Pooled"
     pooled["delta_pp"] = (pooled["p_crisis"] - pooled["p_base"]) * 100.0
     pooled = pooled[["code", "crisis", "p_crisis", "p_base", "delta_pp"]]
@@ -259,7 +289,7 @@ def plot_small_multiples_delta_bars(
         ax.spines["right"].set_visible(False)
         ax.grid(False)
 
-    axes[-1].set_xlabel("Δ percentage points\n(crisis-explicit − baseline)")
+    axes[-1].set_xlabel("Δ percentage points\n(crisis-explicit − non-crisis-explicit)")
     plt.tight_layout()
     fig.subplots_adjust(bottom=0.10)
     fig.savefig(outpath, bbox_inches="tight")
@@ -334,9 +364,9 @@ def plot_delta_bars_hinge(
         ax.grid(False)
         ax.set_xlim(*xlim)
 
-    axes[-1].set_xlabel("Δ percentage points (crisis-explicit − baseline)")
+    axes[-1].set_xlabel("Δ percentage points\n(crisis-explicit − non-crisis-explicit)")
     plt.tight_layout()
-    fig.subplots_adjust(bottom=0.10)
+    fig.subplots_adjust(bottom=0.12)
     fig.savefig(outpath, bbox_inches="tight")
     plt.close(fig)
 
@@ -374,7 +404,7 @@ def plot_fig_C_identity_frame_deltas(
         xmin_ax, xmax_ax = ax.get_xlim()
         xr = xmax_ax - xmin_ax
 
-        # Numeric labels: show positives; skip near-zero and negatives (keeps it clean)
+        # Numeric labels: show positives; skip near-zero and negatives
         for ylab, val in zip(ylabels, sub["delta_pp"]):
             if pd.isna(val) or abs(val) < 0.05:
                 continue
@@ -391,7 +421,7 @@ def plot_fig_C_identity_frame_deltas(
         ax.tick_params(axis="both", width=0.8)
         ax.grid(False)
 
-    axes[-1].set_xlabel("Δ percentage points\n(crisis-explicit − baseline)")
+    axes[-1].set_xlabel("Δ percentage points\n(crisis-explicit − non-crisis-explicit)")
     plt.tight_layout()
     fig.subplots_adjust(left=0.40, bottom=0.12)
     fig.savefig(outpath, bbox_inches="tight")
@@ -447,7 +477,7 @@ def plot_fig_D_enemy_vs_civic_deltas(
         ax.tick_params(axis="both", width=0.8)
         ax.grid(False)
 
-    axes[-1].set_xlabel("Δ percentage points\n(crisis-explicit − baseline)")
+    axes[-1].set_xlabel("Δ percentage points\n(crisis-explicit − non-crisis-explicit)")
     plt.tight_layout()
     fig.subplots_adjust(left=0.40, bottom=0.12)
     fig.savefig(outpath, bbox_inches="tight")
@@ -468,10 +498,10 @@ def plot_fig_E_pooled_theology_reweighting_profile(
     Figure E: Pooled theology reweighting (selected motifs), Δpp bars.
 
     Implements:
-      1) Fixed x-axis to [-20, +20]
-      2) Separator between Text central and Text peripheral (robust to ordering)
-      3) Plot reads "top-down" with Theodicy-group visually at the top
-         (done by inverting the y-axis; no need to reorder codes)
+    1) Fixed x-axis to [-20, +20]
+    2) Separator between Text central and Text peripheral (robust to ordering)
+    3) Plot reads "top-down" with Theodicy-group visually at the top
+       (done by inverting the y-axis; no need to reorder codes)
     """
     assert_codes_exist(tidy, list(codes))
 
@@ -503,16 +533,16 @@ def plot_fig_E_pooled_theology_reweighting_profile(
         zorder=2,
     )
 
-    # (1) Fixed x-axis
+    # Fixed x-axis
     ax.set_xlim(-20, 20)
 
-    # (2) Separator between Text central and Text peripheral (wherever they are)
+    # Separator between Text central and Text peripheral
     code_central = "Tekst i centrum"
     code_periph = "Tekst i periferi"
     if (code_central in codes_in_plot) and (code_periph in codes_in_plot):
         i_c = codes_in_plot.index(code_central)
         i_p = codes_in_plot.index(code_periph)
-        y_sep = (i_c + i_p) / 2.0  # halfway between the two rows
+        y_sep = (i_c + i_p) / 2.0
         ax.axhline(y_sep, color="0.55", linewidth=0.4, zorder=1)
 
     # Value labels (include negatives)
@@ -531,8 +561,8 @@ def plot_fig_E_pooled_theology_reweighting_profile(
         ax.text(x, i, txt, va="center", ha=ha, zorder=3)
 
     # Titles/labels
-    ax.set_title("Pooled crisis effect on motifs and text-use (Δpp)", loc="left")
-    ax.set_xlabel("Δ percentage points (crisis-explicit − baseline)")
+    ax.set_title("")
+    ax.set_xlabel("Δ percentage points in the pooled corpus\n(crisis-explicit − non-crisis-explicit)")
 
     # Style
     ax.spines["top"].set_visible(False)
@@ -542,11 +572,11 @@ def plot_fig_E_pooled_theology_reweighting_profile(
     ax.tick_params(axis="both", width=0.8)
     ax.grid(False)
 
-    # (3) Make it read top-down: first item appears at the top
+    # Make it read top-down
     ax.invert_yaxis()
 
     plt.tight_layout()
-    fig.subplots_adjust(left=0.30)
+    fig.subplots_adjust(left=0.15)
     fig.savefig(outpath, bbox_inches="tight")
     plt.close(fig)
 
@@ -555,11 +585,17 @@ def plot_fig_E_pooled_theology_reweighting_profile(
 # RUN
 # ============================================================
 def main() -> None:
-    # ---- LOAD DATA (the load-data line)
+    # ---- LOAD DATA
     tidy = load_tidy_from_udregninger2(DATA_PATH)
 
-    # Uncomment to inspect available labels if you hit a missing-code error:
-    # print(sorted(tidy["code"].unique()))
+    # Uncomment to inspect pooled values for Figure E if needed:
+    # print(
+    #     tidy.loc[
+    #         (tidy["crisis"] == "Pooled")
+    #         & (tidy["code"].isin(["Tekst i periferi", "Tekst i centrum"])),
+    #         ["code", "p_crisis", "p_base", "delta_pp"]
+    #     ].sort_values("code")
+    # )
 
     available_codes = set(tidy["code"].unique())
 
@@ -579,7 +615,7 @@ def main() -> None:
         outpath=out("fig_B_delta_hinge", "png"),
     )
 
-    # ---- FIGURE C (identity frames activated)
+    # ---- FIGURE C
     codes_C = ["Nationen", "Militær", "Kongehus", "Kirke"]
     codes_C = [c for c in codes_C if c in available_codes]
     if codes_C:
@@ -590,7 +626,7 @@ def main() -> None:
             outpath=out("fig_C_identity_frame_deltas", "png"),
         )
 
-    # ---- FIGURE D (enemy vs civic-minded solidarity)
+    # ---- FIGURE D
     codes_D = ["Ekstern modstander", "Samfundsmæssig transformation", "Trøst", "Savn"]
     codes_D = [c for c in codes_D if c in available_codes]
     if codes_D:
@@ -602,7 +638,6 @@ def main() -> None:
         )
 
     # ---- FIGURE E
-    # Keep the order as you want it to appear top -> bottom.
     codes_E = [
         "Teodicé-problematik",
         "Kærlighed",
