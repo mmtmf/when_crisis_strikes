@@ -131,7 +131,6 @@ Creative Commons Attribution 4.0 International (CC BY 4.0) (see LICENSE-DATA)
 
 Citation:
 If you use this repository, please cite it using CITATION.cff (recommended). 
-Alternatively, cite it as: ... 
 
 ## About the Project
 
