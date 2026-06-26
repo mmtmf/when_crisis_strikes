@@ -19,8 +19,8 @@ keywords:
 
 version: 1.0.0
 
-date-released: YYYY-MM-DD
+date-released: -
 
-doi: ... (if you mint a DOI via Zenodo)
+doi: -
 
-A preferred-citation: block for the article (once the citation is final)
+A preferred-citation: -
