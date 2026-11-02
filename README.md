@@ -49,6 +49,7 @@ Due to copyright regulations, the actual sermon texts are not stored in this pub
 
 It includes coded/derived materials only, such as:
 - `data/Kodeark_3.xlsm` (analysis sheet: *Udregninger 2*)
+- `Supplementary table.xlsm`
 - `data/codebook/` (codebook describing categories/codes)
 - `data/data_dictionary/` (a file descriping the datasheet and relevant calculations)
 
@@ -79,6 +80,7 @@ Folder structure:
 
 - data
     - Kodeark_3.xlsm
+    - Supplementary table
     - codebook
     - data_dictionary
 - results
